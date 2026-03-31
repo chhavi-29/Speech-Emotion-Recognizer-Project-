@@ -1,4 +1,26 @@
 import streamlit as st
+import os
+
+# FORCE FIX for pkg_resources error
+try:
+    import pkg_resources
+except ImportError:
+    import pip
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
+    import pkg_resources
+
+import numpy as np
+
+
+
+
+
+
+
+
+import streamlit as st
 import numpy as np
 import librosa
 import tensorflow as tf
