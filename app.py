@@ -10,7 +10,7 @@ import base64
 from streamlit_mic_recorder import mic_recorder
 
 # ─────────────────────────────────────────
-# 1. ATTENTION LAYER (Fixed to match Colab)
+# 1. ATTENTION LAYER (Matches Colab)
 # ─────────────────────────────────────────
 @tf.keras.utils.register_keras_serializable()
 class AttentionLayer(tf.keras.layers.Layer):
@@ -71,14 +71,24 @@ def set_background(image_file):
     )
 
 # ─────────────────────────────────────────
-# 3. ASSET LOADING
+# 3. ASSET LOADING (With Functional Fix)
 # ─────────────────────────────────────────
 @st.cache_resource
 def load_ser_assets():
+    # Attempt to handle Keras 3 'Functional' class mismatch
+    custom_objs = {'AttentionLayer': AttentionLayer}
+    
+    try:
+        from keras.src.models.functional import Functional
+        custom_objs['Functional'] = Functional
+    except ImportError:
+        pass # Fallback if using Keras 2 environment
+
     model = tf.keras.models.load_model(
         'ser_model_final.keras',
-        custom_objects={'AttentionLayer': AttentionLayer}
+        custom_objects=custom_objs
     )
+    
     with open('scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
     with open('label_map.json', 'r') as f:
@@ -86,7 +96,7 @@ def load_ser_assets():
     return model, scaler, labels
 
 # ─────────────────────────────────────────
-# 4. FEATURE EXTRACTION
+# 4. FEATURE EXTRACTION (Unchanged)
 # ─────────────────────────────────────────
 def extract_features(audio_path, scaler):
     y, sr = librosa.load(audio_path, sr=22050, duration=3.0)
@@ -109,7 +119,7 @@ def extract_features(audio_path, scaler):
     return scaled
 
 # ─────────────────────────────────────────
-# 5. PREDICTION LOGIC
+# 5. PREDICTION LOGIC (Multi-output safe)
 # ─────────────────────────────────────────
 EMOTION_EMOJI = {'neutral': '😐', 'calm': '😌', 'happy': '😄', 'sad': '😢', 'angry': '😠', 'fearful': '😨', 'disgust': '🤢', 'surprised': '😲'}
 EMOTION_COLOR = {'neutral': '#95A5A6', 'calm': '#3498DB', 'happy': '#F1C40F', 'sad': '#7F8C8D', 'angry': '#E74C3C', 'fearful': '#9B59B6', 'disgust': '#27AE60', 'surprised': '#E67E22'}
@@ -121,8 +131,12 @@ def predict_and_display(audio_bytes, model, scaler, int_to_label):
     try:
         final_input = extract_features(tmp_path, scaler)
         raw_preds = model.predict(final_input, verbose=0)
-        # Check if model returned (preds, weights) or just preds
-        preds = raw_preds[0][0] if isinstance(raw_preds, list) else raw_preds[0]
+        
+        # Determine if output is list [preds, weights] or single array
+        if isinstance(raw_preds, list):
+            preds = raw_preds[0][0]
+        else:
+            preds = raw_preds[0]
         
         top_idx = int(np.argmax(preds))
         emotion = int_to_label[str(top_idx)]
@@ -160,6 +174,7 @@ try:
     model, scaler, int_to_label = load_ser_assets()
 except Exception as e:
     st.error(f"❌ Model Loading Error: {e}")
+    st.info("Check requirements.txt to ensure tensorflow and keras versions match your training environment.")
     st.stop()
 
 tab1, tab2 = st.tabs(["📁 File Upload", "🎤 Live Recording"])
@@ -172,7 +187,8 @@ with tab1:
             predict_and_display(up_file.read(), model, scaler, int_to_label)
 
 with tab2:
-    if 'mic_bytes' not in st.session_state: st.session_state['mic_bytes'] = None
+    if 'mic_bytes' not in st.session_state: 
+        st.session_state['mic_bytes'] = None
     
     audio = mic_recorder(start_prompt="⏺ Start Recording", stop_prompt="⏹ Stop Recording", key="mic_rec")
     if audio and audio.get("bytes"):
