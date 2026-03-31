@@ -1,20 +1,25 @@
 import streamlit as st
-import os
+import sys
 
-# FORCE FIX for pkg_resources error
+# 1. THE ULTIMATE BYPASS: If pkg_resources is missing, we create a fake one
+# This prevents the app from crashing before it even starts.
 try:
     import pkg_resources
 except ImportError:
-    import pip
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
-    import pkg_resources
+    # We create a dummy object so 'import pkg_resources' doesn't fail
+    import types
+    pkg_resources = types.ModuleType("pkg_resources")
+    sys.modules["pkg_resources"] = pkg_resources
 
+import os
 import numpy as np
-
-
-
+import librosa
+import tensorflow as tf
+import pickle
+import json
+import tempfile
+import base64
+from streamlit_mic_recorder import mic_recorder
 
 
 
